@@ -10,6 +10,7 @@ export const CandidateAnswerSchema = z.object({
 export const AnswerSchema = z.object({
   eventId: z.string().openapi({ example: 'evt_123', description: '対象イベントID' }),
   userId: z.string().openapi({ example: 'usr_123', description: 'ユーザーID' }),
+  userDisplayName: z.string().openapi({ example: '山田太郎', description: 'ユーザー表示名' }),
   comment: z.string().nullable().openapi({ example: '遅れて参加します', description: 'イベントに対するコメント' }),
   updatedAt: z.string().openapi({ example: '2026-04-27T10:00:00Z', description: '最終更新日時' }),
   candidateAnswers: z.array(CandidateAnswerSchema).openapi({ description: '各候補日時の出欠回答' }),

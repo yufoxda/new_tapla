@@ -1,9 +1,10 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
-import { eq, inArray } from 'drizzle-orm'
+import { eq, inArray, getTableColumns } from 'drizzle-orm'
 import type { AppContext } from '../../core/types'
 import { EventSchema, CreateEventSchema, UpdateEventSchema } from './schema'
 import { events } from './db'
 import { eventAnswers } from '../answers/db'
+import { users } from '../users/db'
 import { requireAuth } from '../../core/auth'
 
 export const eventsRouter = new OpenAPIHono<AppContext>()
@@ -109,10 +110,35 @@ const deleteEventRoute = createRoute({
 })
 
 // ルートとハンドラーの紐付け
+//create
+eventsRouter.openapi(createEventRoute, async (c) => {
+  const db = c.get('db')
+  const user = c.get('user')!
+  const body = c.req.valid('json')
+  
+  const [newEvent] = await db.insert(events).values({
+    title: body.title,
+    description: body.description || null,
+    creatorId: user.id,
+    candidates_date: body.candidates_date,
+    candidates_time: body.candidates_time,
+  }).returning()
+
+  return c.json({ ...newEvent, creatorDisplayName: user.displayName }, 201)
+})
+
+// read
 eventsRouter.openapi(getMyEventsRoute, async (c) => {
   const db = c.get('db')
   const user = c.get('user')!
-  const results = await db.select().from(events).where(eq(events.creatorId, user.id))
+  
+  const results = await db.select({
+    ...getTableColumns(events),
+    creatorDisplayName: users.displayName
+  }).from(events)
+    .innerJoin(users, eq(events.creatorId, users.id))
+    .where(eq(events.creatorId, user.id))
+    
   return c.json(results)
 })
 
@@ -125,35 +151,32 @@ eventsRouter.openapi(getVotedEventsRoute, async (c) => {
   
   if (eventIds.length === 0) return c.json([])
   
-  const results = await db.select().from(events).where(inArray(events.id, eventIds))
+  const results = await db.select({
+    ...getTableColumns(events),
+    creatorDisplayName: users.displayName
+  }).from(events)
+    .innerJoin(users, eq(events.creatorId, users.id))
+    .where(inArray(events.id, eventIds))
+    
   return c.json(results)
 })
 
 eventsRouter.openapi(getEventByIdRoute, async (c) => {
   const db = c.get('db')
   const id = c.req.valid('param').id
-  const [event] = await db.select().from(events).where(eq(events.id, id))
+  
+  const [event] = await db.select({
+    ...getTableColumns(events),
+    creatorDisplayName: users.displayName
+  }).from(events)
+    .innerJoin(users, eq(events.creatorId, users.id))
+    .where(eq(events.id, id))
+    
   if (!event) return c.json({ error: 'Not found' }, 404)
   return c.json(event)
 })
 
-eventsRouter.openapi(createEventRoute, async (c) => {
-  const db = c.get('db')
-  const user = c.get('user')!
-  const body = c.req.valid('json')
-  
-  const [newEvent] = await db.insert(events).values({
-    title: body.title,
-    description: body.description || null,
-    creatorDisplayName: user.name || user.email || 'unknown',
-    creatorId: user.id,
-    candidates_date: body.candidates_date,
-    candidates_time: body.candidates_time,
-  }).returning()
-
-  return c.json(newEvent, 201)
-})
-
+// update
 eventsRouter.openapi(updateEventRoute, async (c) => {
   const db = c.get('db')
   const user = c.get('user')!
@@ -171,9 +194,19 @@ eventsRouter.openapi(updateEventRoute, async (c) => {
   if (body.candidates_time !== undefined) updateData.candidates_time = body.candidates_time
   
   const [updatedEvent] = await db.update(events).set(updateData).where(eq(events.id, id)).returning()
-  return c.json(updatedEvent)
+  
+  const [updatedEventWithUser] = await db.select({
+    ...getTableColumns(events),
+    creatorDisplayName: users.displayName
+  }).from(events)
+    .innerJoin(users, eq(events.creatorId, users.id))
+    .where(eq(events.id, updatedEvent.id))
+    
+  return c.json(updatedEventWithUser)
 })
 
+
+// delete
 eventsRouter.openapi(deleteEventRoute, async (c) => {
   const db = c.get('db')
   const user = c.get('user')!

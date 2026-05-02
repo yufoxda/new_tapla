@@ -1,5 +1,5 @@
 import type { NeonHttpDatabase } from 'drizzle-orm/neon-http'
-import type { User } from './auth' // Will be defined in auth.ts
+import type { appUser } from './auth' // Will be defined in auth.ts
 
 export type CloudflareBindings = {
   DATABASE_URL: string
@@ -10,6 +10,6 @@ export type AppContext = {
   Bindings: CloudflareBindings
   Variables: {
     db: NeonHttpDatabase<any>
-    user?: User
+    user?: appUser
   }
 }

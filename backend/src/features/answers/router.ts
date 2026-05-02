@@ -1,9 +1,9 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
-import { eq, inArray, and, desc, sql } from 'drizzle-orm'
+import { eq, inArray, and, desc, sql, getTableColumns } from 'drizzle-orm'
 import type { AppContext } from '../../core/types'
 import { AnswerSchema, UpsertAnswerSchema, AutoFillStatusSchema } from './schema'
 import { eventAnswers, candidateAnswers, userGlobalAvailability } from './db'
-import { eventCandidates } from '../events/db'
+import { users } from '../users/db'
 import { requireAuth } from '../../core/auth'
 
 export const answersRouter = new OpenAPIHono<AppContext>()
@@ -108,18 +108,22 @@ answersRouter.openapi(createRoute({
 }), async (c) => {
   const db = c.get('db')
   const { eventId } = c.req.param()
-  const eventAns = await db.select().from(eventAnswers).where(eq(eventAnswers.eventId, eventId))
-  const candidates = await db.select().from(eventCandidates).where(eq(eventCandidates.eventId, eventId))
-  const candidateIds = candidates.map(c => c.id)
   
-  let candAnswers: any[] = []
-  if (candidateIds.length > 0) {
-    candAnswers = await db.select().from(candidateAnswers).where(inArray(candidateAnswers.candidateId, candidateIds))
-  }
+  const eventAns = await db.select({
+    ...getTableColumns(eventAnswers),
+    userDisplayName: users.displayName
+  }).from(eventAnswers)
+    .innerJoin(users, eq(eventAnswers.userId, users.id))
+    .where(eq(eventAnswers.eventId, eventId))
+    
+  const candAnswers = await db.select().from(candidateAnswers).where(eq(candidateAnswers.eventId, eventId))
 
   return c.json(eventAns.map(ea => ({
     ...ea,
-    candidateAnswers: candAnswers.filter(ca => ca.userId === ea.userId)
+    candidateAnswers: candAnswers.filter(ca => ca.userId === ea.userId).map(ca => ({
+      candidateId: ca.candidateId,
+      status: ca.status
+    }))
   })))
 })
 
@@ -145,7 +149,7 @@ answersRouter.openapi(createRoute({
   }).returning()
 
   const candidateData = body.candidateAnswers.map(ca => ({
-    candidateId: ca.candidateId, userId: user.id, status: ca.status, updatedAt: now
+    eventId, candidateId: ca.candidateId, userId: user.id, status: ca.status, updatedAt: now
   }))
 
   if (candidateData.length > 0) {
@@ -157,6 +161,7 @@ answersRouter.openapi(createRoute({
 
   return c.json({
     ...upserted,
-    candidateAnswers: candidateData
+    userDisplayName: user.displayName,
+    candidateAnswers: candidateData.map(ca => ({ candidateId: ca.candidateId, status: ca.status }))
   })
 })

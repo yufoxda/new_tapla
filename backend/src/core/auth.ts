@@ -1,11 +1,21 @@
 import type { Context, Next } from 'hono'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { AppContext } from './types'
+import { dbMiddleware } from './db'
+import { users } from '../features/users/db'
+import { eq } from 'drizzle-orm'
 
-export type User = {
+export type authUser = {
   id: string
   email: string
   name: string
+}
+
+export type appUser = {
+  id: string
+  email: string
+  name: string
+  displayName: string
 }
 
 // Keycloak等のJWKSエンドポイントから公開鍵を取得するためのキャッシュ用変数
@@ -22,7 +32,7 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
 
   // --- MOCK AUTH FOR DEVELOPMENT ---
   if (token === 'dev-token') {
-    c.set('user', { id: 'user_dev_123', email: 'dev@example.com', name: '開発ユーザー' })
+    c.set('user', { id: 'user_dev_123', email: 'dev@example.com', name: '開発ユーザー', displayName: '開発ユーザー' })
     return await next()
   }
   // ---------------------------------
@@ -45,13 +55,40 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
       // audience検証も必要に応じて追加
     })
 
-    const user: User = {
-      id: payload.sub as string,
-      email: payload.email as string || '',
-      name: payload.name as string || payload.preferred_username as string || '',
+    const authId = payload.sub as string
+    const email = (payload.email as string) || ''
+    const name = (payload.preferred_username as string) || (payload.name as string) || ''
+    const displayName = (payload.name as string) || (payload.preferred_username as string) || 'Unknown User'
+
+    const db = c.get('db')
+    const existingUser = await db.select().from(users).where(eq(users.authId, authId))
+
+    let appUser: appUser
+
+    if (existingUser.length === 0) {
+      const inserted = await db.insert(users).values({
+        authId,
+        email,
+        name,
+        displayName,
+      }).returning()
+
+      appUser = {
+        id: inserted[0].id,
+        email: inserted[0].email,
+        name: inserted[0].name,
+        displayName: inserted[0].displayName,
+      }
+    } else {
+      appUser = {
+        id: existingUser[0].id,
+        email: existingUser[0].email,
+        name: existingUser[0].name,
+        displayName: existingUser[0].displayName,
+      }
     }
 
-    c.set('user', user)
+    c.set('user', appUser)
     await next()
   } catch (error) {
     console.error('JWT verification failed:', error)

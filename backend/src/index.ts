@@ -16,7 +16,7 @@ const app = new OpenAPIHono<AppContext>()
 // Global Middlewares
 app.use('*', cors())
 app.use('*', dbMiddleware)
-app.use('*', authMiddleware)
+app.use('/user/*', authMiddleware)
 app.onError(errorHandler)
   
 // Feature Routes

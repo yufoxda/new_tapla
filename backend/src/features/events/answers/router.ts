@@ -31,7 +31,6 @@ const getEventAnswersRoute = createRoute({
 const upsertEventAnswerRoute = createRoute({
     method: 'put',
     path: '/',//api/events/{eventId}/answers
-    middleware: [requireAuth] as const,
     request: {
       params: z.object({ eventId: z.string().uuid() }),
       body: { content: { 'application/json': { schema: UpsertAnswerSchema } }, required: true }
@@ -73,64 +72,100 @@ answersRouter.openapi(getEventAnswersRoute, async (c) => {
 
 answersRouter.openapi(upsertEventAnswerRoute, async (c) => {
   const db = c.get('db')
-  const user = c.get('appUser')!
+  const user = c.get('appUser')
   const { eventId } = c.req.valid('param')
   const body = c.req.valid('json')
   const now = new Date().toISOString()
 
   return await db.transaction(async (tx) => {
     // 1. voteuser を Upsert
-    const existing = await tx.select().from(voteUsers).where(
-        and(eq(voteUsers.userId, user.id), eq(voteUsers.voteId, eventId))
-    )
+    if (!user) {
+      // guestuser
+      const [res] = await tx.insert(voteUsers).values({
+          userId: null,
+          voteId: eventId,
+          userLabel: body.userLabel,
+          comment: body.comment || null,
+          updatedAt: now
+      }).returning()
+      const voteUserId = res.id
 
-    let voteUserId: string
-    let updatedVU: any
+      // 2. votes を Insert
+      const voteRecords = body.votes.map(v => ({
+          voteUserId,
+          eventId,
+          eventDateId: v.eventDateId,
+          eventTimeId: v.eventTimeId,
+          status: v.status,
+          votedAt: now
+      }))
 
-    if (existing.length > 0) {
-      // 既に回答済み
-        voteUserId = existing[0].id
-        const [res] = await tx.update(voteUsers).set({
-            updatedAt: now
-        }).where(eq(voteUsers.id, voteUserId)).returning()
-        updatedVU = res
+      if (voteRecords.length > 0) {
+          await tx.insert(votes).values(voteRecords)
+      }
+      return c.json({
+          id: res.id,
+          userId: res.userId,
+          userLabel: res.userLabel,
+          comment: res.comment,
+          updatedAt: res.updatedAt,
+          votes: body.votes
+      })
     } else {
-      // 初めての回答
-        const [res] = await tx.insert(voteUsers).values({
-            userId: user.id,
-            voteId: eventId,
-            userLabel: body.userLabel,
-            comment: body.comment || null,
-            updatedAt: now
-        }).returning()
-        voteUserId = res.id
-        updatedVU = res
+      // login user
+      
+      const existing = await tx.select().from(voteUsers).where(
+          and(eq(voteUsers.userId, user.id), eq(voteUsers.voteId, eventId))
+      )
+
+      let voteUserId: string
+      let updatedVU: any
+
+      if (existing.length > 0) {
+        // 既に回答済み
+          voteUserId = existing[0].id
+          const [res] = await tx.update(voteUsers).set({
+              updatedAt: now
+          }).where(eq(voteUsers.id, voteUserId)).returning()
+          updatedVU = res
+      } else {
+        // 初めての回答
+          const [res] = await tx.insert(voteUsers).values({
+              userId: user.id,
+              voteId: eventId,
+              userLabel: body.userLabel,
+              comment: body.comment || null,
+              updatedAt: now
+          }).returning()
+          voteUserId = res.id
+          updatedVU = res
+      }
+
+      // 2. votes を更新
+      // todo: 差分更新。現状は全削除して入れ直し
+      await tx.delete(votes).where(eq(votes.voteUserId, voteUserId))
+
+      const voteRecords = body.votes.map(v => ({
+          voteUserId,
+          eventId,
+          eventDateId: v.eventDateId,
+          eventTimeId: v.eventTimeId,
+          status: v.status,
+          votedAt: now
+      }))
+
+      if (voteRecords.length > 0) {
+          await tx.insert(votes).values(voteRecords)
+      }
+
+      return c.json({
+          id: updatedVU.id,
+          userId: updatedVU.userId,
+          userLabel: updatedVU.userLabel,
+          comment: updatedVU.comment,
+          updatedAt: updatedVU.updatedAt,
+          votes: body.votes
+      })
     }
-
-    // 2. votes を更新
-    // todo: 差分更新。現状は全削除して入れ直し
-    await tx.delete(votes).where(eq(votes.voteUserId, voteUserId))
-
-    const voteRecords = body.votes.map(v => ({
-        voteUserId,
-        eventId,
-        eventDateId: v.eventDateId,
-        eventTimeId: v.eventTimeId,
-        status: v.status,
-        votedAt: now
-    }))
-
-    if (voteRecords.length > 0) {
-        await tx.insert(votes).values(voteRecords)
-    }
-
-    return c.json({
-        id: updatedVU.id,
-        userId: updatedVU.userId,
-        userLabel: updatedVU.userLabel,
-        comment: updatedVU.comment,
-        updatedAt: updatedVU.updatedAt,
-        votes: body.votes
-    })
   })
 })

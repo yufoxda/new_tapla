@@ -5,7 +5,10 @@ import { EventSchema, CreateEventSchema, UpdateEventSchema } from './schema'
 import { events, eventDates, eventTimes, users, voteUsers } from '../../db/schema'
 import { requireAuth } from '../../core/auth'
 
+import { answersRouter } from './answers/router'
+
 export const eventsRouter = new OpenAPIHono<AppContext>()
+eventsRouter.route('/', answersRouter) // /api/events/:eventId/answers にマウント
 
 // create
 // 予定の作成

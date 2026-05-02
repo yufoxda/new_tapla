@@ -15,7 +15,7 @@ export const answersRouter = new OpenAPIHono<AppContext>()
 // 予定に対する全回答を取得
 const getEventAnswersRoute = createRoute({
   method: 'get',
-  path: '/{eventId}/answers',
+  path: '/',//api/events/{eventId}/answers
   request: { params: z.object({ eventId: z.string().uuid() }) },
   responses: {
     200: {
@@ -30,7 +30,7 @@ const getEventAnswersRoute = createRoute({
 // 投票を更新・修正 (Upsert)
 const upsertEventAnswerRoute = createRoute({
     method: 'put',
-    path: '/{eventId}/answers',
+    path: '/',//api/events/{eventId}/answers
     middleware: [requireAuth] as const,
     request: {
       params: z.object({ eventId: z.string().uuid() }),
@@ -51,23 +51,22 @@ answersRouter.openapi(getEventAnswersRoute, async (c) => {
   const { eventId } = c.req.valid('param')
   
   const allVoteUsers = await db.select().from(voteUsers).where(eq(voteUsers.voteId, eventId))
-  
-  const results = []
-  for (const vu of allVoteUsers) {
+  // todo: N+1問題。回答者が多いとパフォーマンスが悪化するため、JOINでまとめて取るなどの対策が必要
+  // todo: trueのみで絞る
+  const results = await Promise.all(allVoteUsers.map(async (vu) => {
     const userVotes = await db.select().from(votes).where(eq(votes.voteUserId, vu.id))
-    results.push({
+    return {
       id: vu.id,
       userId: vu.userId,
-      userLabel: vu.userLabel,
-      comment: vu.comment,
+      userDisplayname: vu.userLabel,
       updatedAt: vu.updatedAt,
       votes: userVotes.map(v => ({
         eventDateId: v.eventDateId,
         eventTimeId: v.eventTimeId,
         status: v.status
       }))
-    })
-  }
+    }
+  }))
 
   return c.json(results)
 })
@@ -89,14 +88,14 @@ answersRouter.openapi(upsertEventAnswerRoute, async (c) => {
     let updatedVU: any
 
     if (existing.length > 0) {
+      // 既に回答済み
         voteUserId = existing[0].id
         const [res] = await tx.update(voteUsers).set({
-            userLabel: body.userLabel,
-            comment: body.comment || null,
             updatedAt: now
         }).where(eq(voteUsers.id, voteUserId)).returning()
         updatedVU = res
     } else {
+      // 初めての回答
         const [res] = await tx.insert(voteUsers).values({
             userId: user.id,
             voteId: eventId,
@@ -109,6 +108,7 @@ answersRouter.openapi(upsertEventAnswerRoute, async (c) => {
     }
 
     // 2. votes を更新
+    // todo: 差分更新。現状は全削除して入れ直し
     await tx.delete(votes).where(eq(votes.voteUserId, voteUserId))
 
     const voteRecords = body.votes.map(v => ({

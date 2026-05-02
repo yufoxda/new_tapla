@@ -9,7 +9,6 @@ import { errorHandler } from './core/error'
 
 // Features
 import { eventsRouter } from './features/events/router'
-import { answersRouter } from './features/events/answers/router'
 import { usersRouter } from './features/users/router'
 
 const app = new OpenAPIHono<AppContext>()
@@ -23,8 +22,6 @@ app.onError(errorHandler)
 // Feature Routes
 app.route('/api/users', usersRouter)
 app.route('/api/events', eventsRouter)
-// Note: answersRouter is now mounted under /api/events to match /api/events/:eventId/answers
-app.route('/api/events', answersRouter)
 
 // OpenAPI & Swagger UI
 app.doc('/doc', {

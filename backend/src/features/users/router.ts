@@ -5,7 +5,10 @@ import { requireAuth } from '../../core/auth'
 import { UserSchema, UpdateUserSchema } from './schema'
 import { users } from '../../db/schema'
 
+import { userAvailableRouter } from './available/router'
+
 export const usersRouter = new OpenAPIHono<AppContext>()
+usersRouter.route('/available', userAvailableRouter)
 
 // create 
 // ユーザーはKeycloakで管理するため、ユーザー作成APIは不要
@@ -52,7 +55,7 @@ const updateUserInfoRoute = createRoute({
 // --- API実装 ---
 
 usersRouter.openapi(getUserInfoRoute, async (c) => {
-  const user = c.get('user')!
+  const user = c.get('appUser')!
   return c.json({
     id: user.id,
     displayName: user.displayName
@@ -61,7 +64,7 @@ usersRouter.openapi(getUserInfoRoute, async (c) => {
 
 usersRouter.openapi(updateUserInfoRoute, async (c) => {
   const db = c.get('db')
-  const user = c.get('user')!
+  const user = c.get('appUser')!
   const body = c.req.valid('json')
   
   const [updatedUser] = await db.update(users)

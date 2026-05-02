@@ -10,6 +10,6 @@ export type AppContext = {
   Bindings: CloudflareBindings
   Variables: {
     db: NeonHttpDatabase<any>
-    user?: appUser
+    appUser?: appUser
   }
 }

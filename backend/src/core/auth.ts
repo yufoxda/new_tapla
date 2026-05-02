@@ -31,7 +31,7 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
 
   // --- MOCK AUTH FOR DEVELOPMENT ---
   if (token === 'dev-token') {
-    c.set('user', { id: '550e8400-e29b-41d4-a716-446655440003', email: 'dev@example.com', name: '開発ユーザー', displayName: '開発ユーザー' })
+    c.set('appUser', { id: '550e8400-e29b-41d4-a716-446655440003', email: 'dev@example.com', name: '開発ユーザー', displayName: '開発ユーザー' })
     return await next()
   }
   // ---------------------------------
@@ -85,7 +85,7 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
       }
     }
 
-    c.set('user', appUser)
+    c.set('appUser', appUser)
     await next()
   } catch (error) {
     console.error('JWT verification failed:', error)
@@ -95,7 +95,7 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
 
 // 認証を要求するエンドポイント向け
 export const requireAuth = async (c: Context<AppContext>, next: Next) => {
-  const user = c.get('user')
+  const user = c.get('appUser')
   if (!user) {
     // authMiddlewareを通っていない、あるいはパース失敗
     return c.json({ error: 'Unauthorized', message: 'Authentication required' }, 401)

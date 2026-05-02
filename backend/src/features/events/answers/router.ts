@@ -74,7 +74,7 @@ answersRouter.openapi(getEventAnswersRoute, async (c) => {
 
 answersRouter.openapi(upsertEventAnswerRoute, async (c) => {
   const db = c.get('db')
-  const user = c.get('user')!
+  const user = c.get('appUser')!
   const { eventId } = c.req.valid('param')
   const body = c.req.valid('json')
   const now = new Date().toISOString()

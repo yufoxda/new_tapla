@@ -78,7 +78,7 @@ const deleteEventRoute = createRoute({
 // Implementation
 eventsRouter.openapi(createEventRoute, async (c) => {
   const db = c.get('db')
-  const user = c.get('user')!
+  const user = c.get('appUser')!
   const body = c.req.valid('json')
   
   return await db.transaction(async (tx) => {

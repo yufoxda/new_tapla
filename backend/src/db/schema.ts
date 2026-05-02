@@ -78,7 +78,3 @@ export const userAvailabilityPatterns = pgTable('user_availability_patterns', {
   unique('user_availability_patterns_user_id_start_time_end_time_unique').on(t.userId, t.startTime, t.endTime),
 ])
 
-// 古いテーブル名のエイリアスをエクスポート
-export const eventAnswers = voteUsers;
-export const candidateAnswers = votes;
-export const userGlobalAvailability = userAvailabilityPatterns;

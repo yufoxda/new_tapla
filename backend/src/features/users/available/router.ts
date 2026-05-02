@@ -12,9 +12,10 @@ export const userAvailableRouter = new OpenAPIHono<AppContext>()
 
 // read
 // 自分のマスター空き状況を取得
+
 const getMyAvailabilityRoute = createRoute({
     method: 'get',
-    path: '/',
+    path: '/', // /users/available
     middleware: [requireAuth] as const,
     responses: {
         200: {
@@ -28,7 +29,7 @@ const getMyAvailabilityRoute = createRoute({
 // 自分のマスター空き状況を更新
 const updateMyAvailabilityRoute = createRoute({
     method: 'put',
-    path: '/',
+    path: '/', // /users/available
     middleware: [requireAuth] as const,
     request: {
         body: {
@@ -45,13 +46,14 @@ const updateMyAvailabilityRoute = createRoute({
 // updateに統合
 
 
-// Implementation
+// --- API実装 ---
 userAvailableRouter.openapi(getMyAvailabilityRoute, async (c) => {
   const db = c.get('db')
-  const user = c.get('user')!
-  const results = await db.select().from(userAvailabilityPatterns).where(eq(userAvailabilityPatterns.userId, user.id))
+  const user = c.get('appUser')!
+  const results = await db.select().from(userAvailabilityPatterns)
+                            .where(eq(userAvailabilityPatterns.userId, user.id))
+
   return c.json(results.map(r => ({
-    id: r.id,
     startTime: r.startTime,
     endTime: r.endTime
   })))
@@ -59,11 +61,13 @@ userAvailableRouter.openapi(getMyAvailabilityRoute, async (c) => {
 
 userAvailableRouter.openapi(updateMyAvailabilityRoute, async (c) => {
   const db = c.get('db')
-  const user = c.get('user')!
+  const user = c.get('appUser')!
   const body = c.req.valid('json')
 
+  // todo: マージロジックを入れる。現状は全削除して入れ直し
+  // todo: バリデーション。重複や、startTime < endTimeなど
   await db.transaction(async (tx) => {
-    // 全削除して入れ直し
+    
     await tx.delete(userAvailabilityPatterns).where(eq(userAvailabilityPatterns.userId, user.id))
     
     const records = body.map(item => ({

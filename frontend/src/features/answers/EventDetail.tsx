@@ -1,8 +1,7 @@
-import { useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { client } from '../../api/client'
-import { ArrowLeft, Users, PlusCircle, MessageSquare } from 'lucide-react'
+import { ArrowLeft, PlusCircle, MessageSquare } from 'lucide-react'
 
 export default function EventDetail() {
   const { id } = useParams<{ id: string }>()
@@ -12,7 +11,7 @@ export default function EventDetail() {
     queryFn: async () => {
       const res = await client.api.events[':id'].$get({ param: { id: id! } })
       if (!res.ok) throw new Error('Failed to fetch event')
-      return res.json()
+      return res.json() as Promise<any>
     }
   })
 
@@ -21,32 +20,14 @@ export default function EventDetail() {
     queryFn: async () => {
       const res = await client.api.events[':eventId'].answers.$get({ param: { eventId: id! } })
       if (!res.ok) throw new Error('Failed to fetch answers')
-      return res.json()
+      return res.json() as Promise<any[]>
     }
   })
 
-  const { uniqueDates, timeSlots } = useMemo(() => {
-    if (!event?.candidates) return { uniqueDates: [], timeSlots: [] }
-    const datesSet = new Set<string>()
-    const timesSet = new Set<string>()
-    event.candidates.forEach((c: any) => {
-      const d = new Date(c.date)
-      datesSet.add(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'))
-      timesSet.add(String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'))
-    })
-    return { uniqueDates: Array.from(datesSet).sort(), timeSlots: Array.from(timesSet).sort() }
-  }, [event])
-
-  const getParticipantCount = (dateStr: string, timeStr: string) => {
-    const candId = event?.candidates.find((c: any) => {
-        const d = new Date(c.date)
-        const cd = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
-        const ct = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
-        return cd === dateStr && ct === timeStr
-    })?.id
-    if (!candId || !allAnswers) return 0
+  const getParticipantCount = (dateId: string, timeId: string) => {
+    if (!allAnswers) return 0
     return allAnswers.filter((ans: any) => 
-      ans.candidateAnswers.some((ca: any) => ca.candidateId === candId && ca.status === 'attend')
+      ans.votes.some((v: any) => v.eventDateId === dateId && v.eventTimeId === timeId && v.status === 'attend')
     ).length
   }
 
@@ -64,6 +45,7 @@ export default function EventDetail() {
             <div className="max-w-xl">
                 <h1 className="text-4xl font-black text-gray-900 mb-4 tracking-tighter">{event?.title}</h1>
                 <p className="text-gray-500 leading-relaxed">{event?.description}</p>
+                <div className="mt-4 text-[10px] font-black text-gray-300 uppercase tracking-widest">Created by {event?.creatorDisplayName}</div>
             </div>
             <Link
                 to={`/events/${id}/answer`}
@@ -80,33 +62,29 @@ export default function EventDetail() {
                     <div 
                         className="grid" 
                         style={{ 
-                            gridTemplateColumns: `50px repeat(${uniqueDates.length}, 46px)`,
+                            gridTemplateColumns: `50px repeat(${event?.dates.length || 0}, 46px)`,
                         }}
                     >
                         {/* Header Row */}
                         <div className="bg-gray-50/50 p-2 border-b border-r border-gray-50 flex items-center justify-center text-[9px] font-black text-gray-300 uppercase tracking-tighter">Time</div>
-                        {uniqueDates.map(date => {
-                            const d = new Date(date)
-                            return (
-                                <div key={date} className="bg-gray-50/50 p-1 border-b border-r border-gray-50 flex flex-col items-center justify-center min-h-[46px]">
-                                    <div className="text-[10px] text-gray-400 font-black leading-none mb-0.5">{d.getMonth() + 1}/</div>
-                                    <div className="text-sm font-black text-gray-800">{d.getDate()}</div>
-                                </div>
-                            )
-                        })}
+                        {event?.dates.map((d: any) => (
+                            <div key={d.id} className="bg-gray-50/50 p-1 border-b border-r border-gray-50 flex flex-col items-center justify-center min-h-[46px]">
+                                <div className="text-xs font-black text-gray-800">{d.dateLabel}</div>
+                            </div>
+                        ))}
 
                         {/* Data Rows */}
-                        {timeSlots.map(time => (
-                            <div key={time} className="contents">
+                        {event?.times.map((t: any) => (
+                            <div key={t.id} className="contents">
                                 <div className="bg-gray-50/30 p-1 border-b border-r border-gray-50 flex items-center justify-center font-mono text-[10px] font-bold text-gray-400">
-                                    {time}
+                                    {t.timeLabel}
                                 </div>
-                                {uniqueDates.map(date => {
-                                    const count = getParticipantCount(date, time)
+                                {event?.dates.map((d: any) => {
+                                    const count = getParticipantCount(d.id, t.id)
                                     const isHot = count > 0 && allAnswers && count === allAnswers.length && allAnswers.length > 1
                                     
                                     return (
-                                        <div key={date} className="border-b border-r border-gray-50 p-0.5 flex items-center justify-center">
+                                        <div key={d.id} className="border-b border-r border-gray-50 p-0.5 flex items-center justify-center">
                                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black transition-all ${
                                                 count === 0 ? 'text-gray-100' : 
                                                 isHot ? 'bg-orange-500 text-white shadow-lg shadow-orange-100 scale-90' : 'text-blue-600 bg-blue-50/50'
@@ -133,8 +111,8 @@ export default function EventDetail() {
                     <p className="text-gray-300 text-sm italic col-span-2 text-center">No messages yet.</p>
                 ) : (
                     allAnswers?.filter((a: any) => a.comment).map((ans: any) => (
-                        <div key={ans.userId} className="p-5 bg-gray-50 rounded-2xl text-sm border border-gray-50">
-                            <div className="text-[10px] font-black text-gray-400 mb-2 tracking-tighter">{ans.userDisplayName}</div>
+                        <div key={ans.id} className="p-5 bg-gray-50 rounded-2xl text-sm border border-gray-50">
+                            <div className="text-[10px] font-black text-gray-400 mb-2 tracking-tighter">{ans.userLabel}</div>
                             <p className="text-gray-700 leading-relaxed font-medium">{ans.comment}</p>
                         </div>
                     ))

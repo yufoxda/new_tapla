@@ -1,9 +1,13 @@
 import { z } from '@hono/zod-openapi'
 
-export const AvailableStatusEnum = z.enum(['attend', 'absent', 'pending'])
+export const AvailablePatternSchema = z.object({
+  id: z.string().uuid().optional(),
+  startTime: z.string().openapi({ example: '2026-04-27T18:00:00Z' }),
+  endTime: z.string().openapi({ example: '2026-04-27T19:00:00Z' }),
+}).openapi('AvailablePattern')
 
-// 自動入力用エンドポイントのレスポンススキーマ
+// 既存のフロントエンドとの互換性のための暫定スキーマ（必要に応じて）
 export const AutoFillStatusSchema = z.object({
-  date: z.string().openapi({ example: '2026-05-01T18:00:00Z', description: '対象の日時' }),
-  status: AvailableStatusEnum.openapi({ example: 'attend', description: '過去の回答に基づくステータス' }),
+  date: z.string(),
+  status: z.enum(['attend', 'absent', 'pending']),
 }).openapi('AutoFillStatus')

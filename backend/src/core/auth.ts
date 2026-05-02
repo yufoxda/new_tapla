@@ -1,7 +1,6 @@
 import type { Context, Next } from 'hono'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { AppContext } from './types'
-import { dbMiddleware } from './db'
 import { users } from '../db/schema'
 import { eq } from 'drizzle-orm'
 
@@ -32,7 +31,7 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
 
   // --- MOCK AUTH FOR DEVELOPMENT ---
   if (token === 'dev-token') {
-    c.set('user', { id: 'user_dev_123', email: 'dev@example.com', name: '開発ユーザー', displayName: '開発ユーザー' })
+    c.set('user', { id: '550e8400-e29b-41d4-a716-446655440003', email: 'dev@example.com', name: '開発ユーザー', displayName: '開発ユーザー' })
     return await next()
   }
   // ---------------------------------
@@ -68,22 +67,20 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
     if (existingUser.length === 0) {
       const inserted = await db.insert(users).values({
         authUserId: authId,
-        email,
-        name,
         displayName: displayName,
       }).returning()
 
       appUser = {
         id: inserted[0].id,
-        email: inserted[0].email,
-        name: inserted[0].name,
+        email,
+        name,
         displayName: inserted[0].displayName,
       }
     } else {
       appUser = {
         id: existingUser[0].id,
-        email: existingUser[0].email,
-        name: existingUser[0].name,
+        email,
+        name,
         displayName: existingUser[0].displayName,
       }
     }

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, varchar, integer, boolean, unique, uuid } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, varchar, integer, unique, uuid } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
 // 1. users: アプリケーションユーザー
@@ -48,6 +48,7 @@ export const voteUsers = pgTable('voteuser', {
   userId: uuid('userid').references(() => users.id, { onDelete: 'cascade' }), // 登録ユーザーの場合
   userLabel: varchar('userlabel', { length: 255 }).notNull(), // 表示名
   voteId: uuid('voteid').references(() => events.id, { onDelete: 'cascade' }).notNull(), // どのイベントの参加者か
+  comment: text('comment'), // イベント全体へのコメント
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 }, (t) => [
@@ -61,7 +62,7 @@ export const votes = pgTable('votes', {
   eventId: uuid('event_id').references(() => events.id, { onDelete: 'cascade' }).notNull(),
   eventDateId: uuid('event_date_id').references(() => eventDates.id, { onDelete: 'cascade' }).notNull(),
   eventTimeId: uuid('event_time_id').references(() => eventTimes.id, { onDelete: 'cascade' }).notNull(),
-  isAvailable: boolean('is_available').notNull().default(false), // 〇か✕か
+  status: text('status').$type<'attend' | 'absent' | 'pending'>().notNull().default('pending'),
   votedAt: timestamp('voted_at', { mode: 'string' }).defaultNow().notNull(),
 }, (t) => [
   unique('votes_voteuser_id_event_date_id_event_time_id_unique').on(t.voteUserId, t.eventDateId, t.eventTimeId),
@@ -77,7 +78,7 @@ export const userAvailabilityPatterns = pgTable('user_availability_patterns', {
   unique('user_availability_patterns_user_id_start_time_end_time_unique').on(t.userId, t.startTime, t.endTime),
 ])
 
-// 古いテーブル名のエイリアスをエクスポート（一時的な互換性のため）
+// 古いテーブル名のエイリアスをエクスポート
 export const eventAnswers = voteUsers;
 export const candidateAnswers = votes;
 export const userGlobalAvailability = userAvailabilityPatterns;

@@ -1,21 +1,22 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
-import { eq, inArray, and, desc, sql, getTableColumns } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import type { AppContext } from '../../../core/types'
 import { AnswerSchema, UpsertAnswerSchema } from './schema'
-import { eventAnswers, candidateAnswers, users } from '../../../db/schema'
+import { voteUsers, votes } from '../../../db/schema'
 import { requireAuth } from '../../../core/auth'
 
 export const answersRouter = new OpenAPIHono<AppContext>()
 
-// read
-//update に統合
+// create
+// update に統合
+
 
 // read
 // 予定に対する全回答を取得
 const getEventAnswersRoute = createRoute({
   method: 'get',
   path: '/{eventId}/answers',
-  request: { params: z.object({ eventId: z.string() }) },
+  request: { params: z.object({ eventId: z.string().uuid() }) },
   responses: {
     200: {
       content: { 'application/json': { schema: z.array(AnswerSchema) } },
@@ -32,7 +33,7 @@ const upsertEventAnswerRoute = createRoute({
     path: '/{eventId}/answers',
     middleware: [requireAuth] as const,
     request: {
-      params: z.object({ eventId: z.string() }),
+      params: z.object({ eventId: z.string().uuid() }),
       body: { content: { 'application/json': { schema: UpsertAnswerSchema } }, required: true }
     },
     responses: {
@@ -41,7 +42,7 @@ const upsertEventAnswerRoute = createRoute({
 })
 
 // delete
-//updateに統合
+// updateに統合
 
 // --- API実装 ---
 
@@ -49,22 +50,26 @@ answersRouter.openapi(getEventAnswersRoute, async (c) => {
   const db = c.get('db')
   const { eventId } = c.req.valid('param')
   
-  const eventAns = await db.select({
-    ...getTableColumns(eventAnswers),
-    userDisplayName: users.displayName
-  }).from(eventAnswers)
-    .innerJoin(users, eq(eventAnswers.userId, users.id))
-    .where(eq(eventAnswers.eventId, eventId))
-    
-  const candAnswers = await db.select().from(candidateAnswers).where(eq(candidateAnswers.eventId, eventId))
+  const allVoteUsers = await db.select().from(voteUsers).where(eq(voteUsers.voteId, eventId))
+  
+  const results = []
+  for (const vu of allVoteUsers) {
+    const userVotes = await db.select().from(votes).where(eq(votes.voteUserId, vu.id))
+    results.push({
+      id: vu.id,
+      userId: vu.userId,
+      userLabel: vu.userLabel,
+      comment: vu.comment,
+      updatedAt: vu.updatedAt,
+      votes: userVotes.map(v => ({
+        eventDateId: v.eventDateId,
+        eventTimeId: v.eventTimeId,
+        status: v.status as 'attend' | 'absent' | 'pending'
+      }))
+    })
+  }
 
-  return c.json(eventAns.map(ea => ({
-    ...ea,
-    candidateAnswers: candAnswers.filter(ca => ca.userId === ea.userId).map(ca => ({
-      candidateId: ca.candidateId,
-      status: ca.status
-    }))
-  })))
+  return c.json(results)
 })
 
 answersRouter.openapi(upsertEventAnswerRoute, async (c) => {
@@ -74,27 +79,58 @@ answersRouter.openapi(upsertEventAnswerRoute, async (c) => {
   const body = c.req.valid('json')
   const now = new Date().toISOString()
 
-  const [upserted] = await db.insert(eventAnswers).values({
-    eventId, userId: user.id, comment: body.comment || null, updatedAt: now
-  }).onConflictDoUpdate({
-    target: [eventAnswers.eventId, eventAnswers.userId],
-    set: { comment: body.comment || null, updatedAt: now }
-  }).returning()
+  return await db.transaction(async (tx) => {
+    // 1. voteuser を Upsert
+    const existing = await tx.select().from(voteUsers).where(
+        and(eq(voteUsers.userId, user.id), eq(voteUsers.voteId, eventId))
+    )
 
-  const candidateData = body.candidateAnswers.map(ca => ({
-    eventId, candidateId: ca.candidateId, userId: user.id, status: ca.status, updatedAt: now
-  }))
+    let voteUserId: string
+    let updatedVU: any
 
-  if (candidateData.length > 0) {
-    await db.insert(candidateAnswers).values(candidateData).onConflictDoUpdate({
-      target: [candidateAnswers.candidateId, candidateAnswers.userId],
-      set: { status: sql`excluded.status`, updatedAt: now }
+    if (existing.length > 0) {
+        voteUserId = existing[0].id
+        const [res] = await tx.update(voteUsers).set({
+            userLabel: body.userLabel,
+            comment: body.comment || null,
+            updatedAt: now
+        }).where(eq(voteUsers.id, voteUserId)).returning()
+        updatedVU = res
+    } else {
+        const [res] = await tx.insert(voteUsers).values({
+            userId: user.id,
+            voteId: eventId,
+            userLabel: body.userLabel,
+            comment: body.comment || null,
+            updatedAt: now
+        }).returning()
+        voteUserId = res.id
+        updatedVU = res
+    }
+
+    // 2. votes を更新
+    await tx.delete(votes).where(eq(votes.voteUserId, voteUserId))
+
+    const voteRecords = body.votes.map(v => ({
+        voteUserId,
+        eventId,
+        eventDateId: v.eventDateId,
+        eventTimeId: v.eventTimeId,
+        status: v.status,
+        votedAt: now
+    }))
+
+    if (voteRecords.length > 0) {
+        await tx.insert(votes).values(voteRecords)
+    }
+
+    return c.json({
+        id: updatedVU.id,
+        userId: updatedVU.userId,
+        userLabel: updatedVU.userLabel,
+        comment: updatedVU.comment,
+        updatedAt: updatedVU.updatedAt,
+        votes: body.votes
     })
-  }
-
-  return c.json({
-    ...upserted,
-    userDisplayName: user.displayName,
-    candidateAnswers: candidateData.map(ca => ({ candidateId: ca.candidateId, status: ca.status }))
   })
 })

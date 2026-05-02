@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { client } from '../../api/client'
-import { ArrowLeft, Calendar as CalendarIcon, Clock, Hash, List, Eye } from 'lucide-react'
+import { ArrowLeft, Eye } from 'lucide-react'
 
 export default function EventCreate() {
   const navigate = useNavigate()
@@ -16,34 +16,26 @@ export default function EventCreate() {
   const [hourCount, setHourCount] = useState(4)
 
   // プレビュー用の候補リスト生成ロジック
-  const previewCandidates = useMemo(() => {
-    const candidates: Date[] = []
+  const { uniqueDates, timeSlots } = useMemo(() => {
+    const dates: string[] = []
+    const times: string[] = []
     try {
         const startBase = new Date(`${startDate}T${startTime}:00`)
-        if (isNaN(startBase.getTime())) return []
+        if (isNaN(startBase.getTime())) return { uniqueDates: [], timeSlots: [] }
 
         for (let d = 0; d < dayCount; d++) {
-            for (let h = 0; h < hourCount; h++) {
-                const date = new Date(startBase)
-                date.setDate(date.getDate() + d)
-                date.setHours(date.getHours() + h)
-                candidates.push(date)
-            }
+            const date = new Date(startBase)
+            date.setDate(date.getDate() + d)
+            dates.push(`${date.getMonth() + 1}/${date.getDate()}`)
         }
-    } catch (e) { return [] }
-    return candidates
+        for (let h = 0; h < hourCount; h++) {
+            const date = new Date(startBase)
+            date.setHours(date.getHours() + h)
+            times.push(String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0'))
+        }
+    } catch (e) { return { uniqueDates: [], timeSlots: [] } }
+    return { uniqueDates: Array.from(new Set(dates)), timeSlots: Array.from(new Set(times)) }
   }, [startDate, dayCount, startTime, hourCount])
-
-  // マトリクス表示用のデータ整形
-  const { uniqueDates, timeSlots } = useMemo(() => {
-    const datesSet = new Set<string>()
-    const timesSet = new Set<string>()
-    previewCandidates.forEach(d => {
-      datesSet.add(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'))
-      timesSet.add(String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'))
-    })
-    return { uniqueDates: Array.from(datesSet).sort(), timeSlots: Array.from(timesSet).sort() }
-  }, [previewCandidates])
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -51,13 +43,14 @@ export default function EventCreate() {
         json: {
           title,
           description: description || undefined,
-          candidates: previewCandidates.map(d => d.toISOString())
+          dates: uniqueDates,
+          times: timeSlots
         }
       })
       if (!res.ok) throw new Error('Failed to create event')
       return res.json()
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['events'] })
       navigate(`/events/${data.id}`)
     }
@@ -125,15 +118,11 @@ export default function EventCreate() {
                         <div className="overflow-x-auto">
                             <div className="grid" style={{ gridTemplateColumns: `50px repeat(${uniqueDates.length}, 40px)` }}>
                                 <div className="p-2 border-b border-r border-gray-50" />
-                                {uniqueDates.map(date => {
-                                    const d = new Date(date)
-                                    return (
-                                        <div key={date} className="p-1 border-b border-r border-gray-50 text-center flex flex-col justify-center min-h-[40px] bg-gray-50/50">
-                                            <div className="text-[9px] font-black text-gray-400 leading-none">{d.getMonth() + 1}/</div>
-                                            <div className="text-xs font-black text-gray-800">{d.getDate()}</div>
-                                        </div>
-                                    )
-                                })}
+                                {uniqueDates.map(date => (
+                                    <div key={date} className="p-1 border-b border-r border-gray-50 text-center flex flex-col justify-center min-h-[40px] bg-gray-50/50">
+                                        <div className="text-xs font-black text-gray-800">{date}</div>
+                                    </div>
+                                ))}
                                 {timeSlots.map(time => (
                                     <div key={time} className="contents">
                                         <div className="p-1 border-b border-r border-gray-50 text-[9px] font-bold text-gray-400 font-mono flex items-center justify-center bg-gray-50/50">{time}</div>

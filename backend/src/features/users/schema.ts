@@ -1,9 +1,7 @@
 import { z } from '@hono/zod-openapi'
 
 export const UserSchema = z.object({
-  id: z.string().openapi({ example: 'usr_123', description: 'ユーザー内部ID' }),
-  email: z.string().openapi({ example: 'test@example.com', description: 'メールアドレス' }),
-  name: z.string().openapi({ example: 'taro_yamada', description: 'ユーザー名（システム用）' }),
+  id: z.string().uuid().openapi({ example: '550e8400-e29b-41d4-a716-446655440003', description: 'ユーザー内部ID' }),
   displayName: z.string().openapi({ example: '山田太郎', description: '表示名' }),
 }).openapi('User')
 

@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { client } from '../../api/client'
-import { ArrowLeft, Check, Save } from 'lucide-react'
+import { ArrowLeft, Check } from 'lucide-react'
 
 type AnswerStatus = 'attend' | 'absent'
 
@@ -11,7 +11,9 @@ export default function EventAnswer() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   
+  const [userLabel, setUserLabel] = useState('')
   const [comment, setComment] = useState('')
+  // Key: "dateId:timeId", Value: status
   const [localAnswers, setLocalAnswers] = useState<Record<string, AnswerStatus>>({})
 
   const { data: event, isLoading: loadingEvent } = useQuery({
@@ -19,68 +21,49 @@ export default function EventAnswer() {
     queryFn: async () => {
       const res = await client.api.events[':id'].$get({ param: { id: id! } })
       if (!res.ok) throw new Error('Failed to fetch event')
-      return res.json()
+      return res.json() as Promise<any>
     },
     enabled: !!id
   })
 
-  const { data: autofillData } = useQuery({
-    queryKey: ['autofill', event?.candidates?.map((c: any) => c.date).join(',')],
+  // ログインユーザー情報を取得してデフォルトの名前をセット
+  useQuery({
+    queryKey: ['me'],
     queryFn: async () => {
-      if (!event?.candidates?.length) return []
-      const datesParam = event.candidates.map((c: any) => c.date).join(',')
-      const res = await client.api.users.me.autofill.$get({ query: { dates: datesParam } })
-      if (!res.ok) throw new Error('Failed to fetch autofill data')
-      return res.json()
-    },
-    enabled: !!event?.candidates?.length
+      const res = await client.api.users.me.$get()
+      if (res.ok) {
+        const data = await res.json() as any
+        setUserLabel((prev: string) => prev || data.displayName)
+      }
+      return null
+    }
   })
 
   useEffect(() => {
     if (!event) return
     const initial: Record<string, AnswerStatus> = {}
-    event.candidates.forEach((cand: any) => {
-      const auto = autofillData?.find((a: any) => a.date === cand.date)
-      initial[cand.id] = (auto?.status === 'attend') ? 'attend' : 'absent'
+    event.dates.forEach((d: any) => {
+      event.times.forEach((t: any) => {
+        initial[`${d.id}:${t.id}`] = 'absent'
+      })
     })
     setLocalAnswers(initial)
-  }, [event, autofillData])
-
-  const { uniqueDates, timeSlots } = useMemo(() => {
-    if (!event?.candidates) return { uniqueDates: [], timeSlots: [] }
-    const datesSet = new Set<string>()
-    const timesSet = new Set<string>()
-    event.candidates.forEach((c: any) => {
-      const d = new Date(c.date)
-      const dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
-      const timeStr = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
-      datesSet.add(dateStr)
-      timesSet.add(timeStr)
-    })
-    return { uniqueDates: Array.from(datesSet).sort(), timeSlots: Array.from(timesSet).sort() }
   }, [event])
-
-  const getCandidateId = (dateStr: string, timeStr: string) => {
-    return event?.candidates.find((c: any) => {
-      const d = new Date(c.date)
-      const cd = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
-      const ct = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
-      return cd === dateStr && ct === timeStr
-    })?.id
-  }
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      const payload = {
-        comment,
-        candidateAnswers: Object.entries(localAnswers).map(([candidateId, status]) => ({
-          candidateId,
-          status: status as 'attend' | 'absent' | 'pending'
-        }))
-      }
-      const res = await client.api.events[':eventId'].answers.me.$put({
+      const votes = Object.entries(localAnswers).map(([key, status]) => {
+        const [eventDateId, eventTimeId] = key.split(':')
+        return { eventDateId, eventTimeId, status: status as 'attend' | 'absent' | 'pending' }
+      })
+
+      const res = await client.api.events[':eventId'].answers.$put({
         param: { eventId: id! },
-        json: payload
+        json: {
+          userLabel,
+          comment,
+          votes
+        }
       })
       if (!res.ok) throw new Error('Failed to submit answer')
       return res.json()
@@ -103,42 +86,46 @@ export default function EventAnswer() {
 
         <h1 className="text-2xl font-black text-gray-900 mb-10 text-center">{event?.title}</h1>
 
+        <div className="max-w-sm mx-auto mb-10 space-y-4">
+            <input
+                type="text"
+                value={userLabel}
+                onChange={e => setUserLabel(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 text-sm font-bold"
+                placeholder="Your Name"
+            />
+        </div>
+
         <div className="flex justify-center">
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-2xl shadow-gray-200/50">
                 <div className="overflow-x-auto">
                 <div 
                     className="grid" 
                     style={{ 
-                        gridTemplateColumns: `50px repeat(${uniqueDates.length}, 46px)`,
+                        gridTemplateColumns: `50px repeat(${event?.dates.length || 0}, 46px)`,
                     }}
                 >
                     {/* Header Row */}
                     <div className="bg-gray-50/50 p-2 border-b border-r border-gray-50 flex items-center justify-center text-[9px] font-black text-gray-300 uppercase tracking-tighter">Time</div>
-                    {uniqueDates.map(date => {
-                        const d = new Date(date)
-                        return (
-                        <div key={date} className="bg-gray-50/50 p-1 border-b border-r border-gray-50 flex flex-col items-center justify-center min-h-[46px]">
-                            <div className="text-[10px] text-gray-400 font-black leading-none mb-0.5">{d.getMonth() + 1}/</div>
-                            <div className="text-sm font-black text-gray-800">{d.getDate()}</div>
+                    {event?.dates.map((d: any) => (
+                        <div key={d.id} className="bg-gray-50/50 p-1 border-b border-r border-gray-50 flex flex-col items-center justify-center min-h-[46px]">
+                            <div className="text-xs font-black text-gray-800">{d.dateLabel}</div>
                         </div>
-                        )
-                    })}
+                    ))}
 
                     {/* Data Rows */}
-                    {timeSlots.map(time => (
-                    <div key={time} className="contents">
+                    {event?.times.map((t: any) => (
+                    <div key={t.id} className="contents">
                         <div className="bg-gray-50/30 p-1 border-b border-r border-gray-50 flex items-center justify-center font-mono text-[10px] font-bold text-gray-400">
-                        {time}
+                        {t.timeLabel}
                         </div>
-                        {uniqueDates.map(date => {
-                        const candId = getCandidateId(date, time)
-                        if (!candId) return <div key={date} className="bg-gray-50/10 border-b border-r border-gray-50"></div>
-                        
-                        const isAttending = localAnswers[candId] === 'attend'
+                        {event?.dates.map((d: any) => {
+                        const cellKey = `${d.id}:${t.id}`
+                        const isAttending = localAnswers[cellKey] === 'attend'
                         return (
-                            <div key={date} className="border-b border-r border-gray-50 p-0.5 flex items-center justify-center">
+                            <div key={d.id} className="border-b border-r border-gray-50 p-0.5 flex items-center justify-center">
                             <button
-                                onClick={() => setLocalAnswers(prev => ({ ...prev, [candId]: isAttending ? 'absent' : 'attend' }))}
+                                onClick={() => setLocalAnswers(prev => ({ ...prev, [cellKey]: isAttending ? 'absent' : 'attend' }))}
                                 className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-75 ${
                                     isAttending 
                                     ? 'bg-blue-600 text-white scale-90' 
@@ -171,9 +158,10 @@ export default function EventAnswer() {
       <div className="fixed bottom-8 left-0 right-0 px-4 flex justify-center z-20">
         <button
           onClick={() => submitMutation.mutate()}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-20 py-4 rounded-full font-black shadow-xl shadow-blue-200 transition transform active:scale-95 uppercase text-xs tracking-widest"
+          disabled={submitMutation.isPending || !userLabel}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-20 py-4 rounded-full font-black shadow-xl shadow-blue-200 transition transform active:scale-95 uppercase text-xs tracking-widest disabled:opacity-50"
         >
-          Confirm Availability
+          {submitMutation.isPending ? 'Submitting...' : 'Confirm Availability'}
         </button>
       </div>
     </div>

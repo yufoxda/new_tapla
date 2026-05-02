@@ -1,4 +1,4 @@
-import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
+import { OpenAPIHono, createRoute } from '@hono/zod-openapi'
 import { eq } from 'drizzle-orm'
 import type { AppContext } from '../../core/types'
 import { requireAuth } from '../../core/auth'
@@ -7,11 +7,15 @@ import { users } from '../../db/schema'
 
 export const usersRouter = new OpenAPIHono<AppContext>()
 
+// create 
+// ユーザーはKeycloakで管理するため、ユーザー作成APIは不要
+
+
 // read
 // ユーザー情報の取得
 const getUserInfoRoute = createRoute({
     method: 'get',
-    path: '/me',
+    path: '/',
     middleware: [requireAuth] as const,
     responses: {
         200: {
@@ -26,7 +30,7 @@ const getUserInfoRoute = createRoute({
 // ユーザー情報の更新
 const updateUserInfoRoute = createRoute({
     method: 'put',
-    path: '/me',
+    path: '/',
     middleware: [requireAuth] as const,
     request: {
         body: {
@@ -42,11 +46,17 @@ const updateUserInfoRoute = createRoute({
     },
 })
 
+// delete
+// ユーザーはKeycloakで管理するため、ユーザー削除APIは不要
+
 // --- API実装 ---
 
 usersRouter.openapi(getUserInfoRoute, async (c) => {
   const user = c.get('user')!
-  return c.json(user)
+  return c.json({
+    id: user.id,
+    displayName: user.displayName
+  })
 })
 
 usersRouter.openapi(updateUserInfoRoute, async (c) => {
@@ -55,16 +65,12 @@ usersRouter.openapi(updateUserInfoRoute, async (c) => {
   const body = c.req.valid('json')
   
   const [updatedUser] = await db.update(users)
-    .set({ displayName: body.displayName })
+    .set({ displayName: body.displayName, updatedAt: new Date().toISOString() })
     .where(eq(users.id, user.id))
     .returning()
 
-  // セッションのユーザー情報も更新されたものとして扱う場合があるが、
-  // Workerのこのリクエストスコープ内では特に必要なし
   return c.json({
     id: updatedUser.id,
-    email: updatedUser.email,
-    name: updatedUser.name,
     displayName: updatedUser.displayName,
   })
 })

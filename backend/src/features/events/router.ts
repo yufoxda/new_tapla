@@ -2,9 +2,7 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { eq, inArray, getTableColumns } from 'drizzle-orm'
 import type { AppContext } from '../../core/types'
 import { EventSchema, CreateEventSchema, UpdateEventSchema } from './schema'
-import { events } from './db'
-import { eventAnswers } from '../answers/db'
-import { users } from '../users/db'
+import { events, eventAnswers, users } from '../../db/schema'
 import { requireAuth } from '../../core/auth'
 
 export const eventsRouter = new OpenAPIHono<AppContext>()

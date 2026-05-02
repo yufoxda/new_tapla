@@ -29,7 +29,7 @@ export default function EventAnswer() {
     queryFn: async () => {
       if (!event?.candidates?.length) return []
       const datesParam = event.candidates.map((c: any) => c.date).join(',')
-      const res = await client.api.answers.autofill.$get({ query: { dates: datesParam } })
+      const res = await client.api.users.me.autofill.$get({ query: { dates: datesParam } })
       if (!res.ok) throw new Error('Failed to fetch autofill data')
       return res.json()
     },
@@ -75,10 +75,10 @@ export default function EventAnswer() {
         comment,
         candidateAnswers: Object.entries(localAnswers).map(([candidateId, status]) => ({
           candidateId,
-          status,
+          status: status as 'attend' | 'absent' | 'pending'
         }))
       }
-      const res = await client.api.answers[':eventId'].$put({
+      const res = await client.api.events[':eventId'].answers.me.$put({
         param: { eventId: id! },
         json: payload
       })

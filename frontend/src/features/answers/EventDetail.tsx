@@ -19,7 +19,7 @@ export default function EventDetail() {
   const { data: allAnswers, isLoading: loadingAnswers } = useQuery({
     queryKey: ['answers', id],
     queryFn: async () => {
-      const res = await client.api.answers[':eventId'].$get({ param: { eventId: id! } })
+      const res = await client.api.events[':eventId'].answers.$get({ param: { eventId: id! } })
       if (!res.ok) throw new Error('Failed to fetch answers')
       return res.json()
     }
@@ -134,7 +134,7 @@ export default function EventDetail() {
                 ) : (
                     allAnswers?.filter((a: any) => a.comment).map((ans: any) => (
                         <div key={ans.userId} className="p-5 bg-gray-50 rounded-2xl text-sm border border-gray-50">
-                            <div className="text-[9px] font-black text-gray-400 mb-2 uppercase tracking-tighter">User_{ans.userId.slice(0,5)}</div>
+                            <div className="text-[10px] font-black text-gray-400 mb-2 tracking-tighter">{ans.userDisplayName}</div>
                             <p className="text-gray-700 leading-relaxed font-medium">{ans.comment}</p>
                         </div>
                     ))

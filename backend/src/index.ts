@@ -4,25 +4,27 @@ import { cors } from 'hono/cors'
 
 import type { AppContext } from './core/types'
 import { dbMiddleware } from './core/db'
-import { authMiddleware } from './core/auth'
 import { errorHandler } from './core/error'
 
 // Features
 import { eventsRouter } from './features/events/router'
-import { answersRouter } from './features/answers/router'
+import { answersRouter } from './features/events/answers/router'
+import { usersRouter } from './features/users/router'
+import { userAvailableRouter } from './features/users/available/router'
 
 const app = new OpenAPIHono<AppContext>()
 
 // Global Middlewares
 app.use('*', cors())
 app.use('*', dbMiddleware)
-// app.use('*', authMiddleware)
 app.onError(errorHandler)
 
 // Feature Routes
+app.route('/api/users', usersRouter)
+app.route('/api/users/available', userAvailableRouter)
 app.route('/api/events', eventsRouter)
-app.route('/api/answers', answersRouter)
-
+// Note: answersRouter is now mounted under /api/events to match /api/events/:eventId/answers
+app.route('/api/events', answersRouter)
 
 // OpenAPI & Swagger UI
 app.doc('/doc', {

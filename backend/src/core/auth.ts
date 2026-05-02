@@ -2,7 +2,7 @@ import type { Context, Next } from 'hono'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import type { AppContext } from './types'
 import { dbMiddleware } from './db'
-import { users } from '../features/users/db'
+import { users } from '../db/schema'
 import { eq } from 'drizzle-orm'
 
 export type authUser = {
@@ -61,16 +61,16 @@ export const authMiddleware = async (c: Context<AppContext>, next: Next) => {
     const displayName = (payload.name as string) || (payload.preferred_username as string) || 'Unknown User'
 
     const db = c.get('db')
-    const existingUser = await db.select().from(users).where(eq(users.authId, authId))
+    const existingUser = await db.select().from(users).where(eq(users.authUserId, authId))
 
     let appUser: appUser
 
     if (existingUser.length === 0) {
       const inserted = await db.insert(users).values({
-        authId,
+        authUserId: authId,
         email,
         name,
-        displayName,
+        displayName: displayName,
       }).returning()
 
       appUser = {

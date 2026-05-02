@@ -1,0 +1,8 @@
+{
+  "name": "tapla-monorepo",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ]
+}

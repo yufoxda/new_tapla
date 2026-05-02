@@ -8,6 +8,7 @@ import { requireAuth } from '../../core/auth'
 export const eventsRouter = new OpenAPIHono<AppContext>()
 
 // create
+// 予定の作成
 const createEventRoute = createRoute({
   method: 'post',
   path: '/',
@@ -27,6 +28,7 @@ const createEventRoute = createRoute({
 })
 
 // read
+// 予定詳細の取得
 const getEventByIdRoute = createRoute({
   method: 'get',
   path: '/{id}',
@@ -41,6 +43,7 @@ const getEventByIdRoute = createRoute({
 })
 
 // update
+// 予定の更新
 const updateEventRoute = createRoute({
   method: 'put',
   path: '/{id}',
@@ -62,6 +65,7 @@ const updateEventRoute = createRoute({
 })
 
 // delete
+// 予定の削除
 const deleteEventRoute = createRoute({
   method: 'delete',
   path: '/{id}',
@@ -75,7 +79,7 @@ const deleteEventRoute = createRoute({
 
 
 
-// Implementation
+// --- API実装 ---
 eventsRouter.openapi(createEventRoute, async (c) => {
   const db = c.get('db')
   const user = c.get('appUser')!
@@ -130,3 +134,42 @@ eventsRouter.openapi(getEventByIdRoute, async (c) => {
 
   return c.json({ ...event, dates, times })
 })
+
+eventsRouter.openapi(updateEventRoute, async (c) => {
+  const db = c.get('db')
+  const user = c.get('appUser')!
+  const id = c.req.valid('param').id
+  const body = c.req.valid('json')
+  const now = new Date().toISOString()
+
+  const [existing] = await db.select().from(events).where(eq(events.id, id))
+  if (!existing) return c.json({ error: 'Not found' }, 404)
+  if (existing.creatorId !== user.id) {
+    return c.json({ error: 'Forbidden' }, 403)
+  }
+
+  return await db.transaction(async (tx) => {
+    const updatedEvent = await tx.update(events).set({
+      title: body.title,
+      description: body.description || null,
+      updatedAt: now,
+    }).where(eq(events.id, id)).returning()
+    return c.json(updatedEvent)
+  })
+})
+
+eventsRouter.openapi(deleteEventRoute, async (c) => {
+  const db = c.get('db')
+  const user = c.get('appUser')!
+  const id = c.req.valid('param').id
+
+  const [existing] = await db.select().from(events).where(eq(events.id, id))
+  if (!existing) return c.json({ error: 'Not found' }, 404)
+  if (existing.creatorId !== user.id) {
+    return c.json({ error: 'Forbidden' }, 403)
+  }
+
+  await db.delete(events).where(eq(events.id, id))
+  return c.body(null, 204)
+})
+

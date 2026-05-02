@@ -64,7 +64,7 @@ answersRouter.openapi(getEventAnswersRoute, async (c) => {
       votes: userVotes.map(v => ({
         eventDateId: v.eventDateId,
         eventTimeId: v.eventTimeId,
-        status: v.status as 'attend' | 'absent' | 'pending'
+        status: v.status
       }))
     })
   }

@@ -1,12 +1,11 @@
 import { z } from '@hono/zod-openapi'
 
-export const AnswerStatusEnum = z.enum(['attend', 'absent', 'pending'])
 
 // 各セルの投票データ
 export const CellVoteSchema = z.object({
   eventDateId: z.string().uuid().openapi({ example: '550e8400-e29b-41d4-a716-446655440000' }),
   eventTimeId: z.string().uuid().openapi({ example: '550e8400-e29b-41d4-a716-446655440001' }),
-  status: AnswerStatusEnum.openapi({ example: 'attend' }),
+  status: z.boolean().openapi({ example: true, description: '参加可能かどうか (true: 可能, false: 不可能)' }),
 })
 
 // イベント回答者ごとのデータ

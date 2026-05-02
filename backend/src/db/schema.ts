@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, varchar, integer, unique, uuid } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, varchar, integer, unique, uuid, boolean } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
 // 1. users: アプリケーションユーザー
@@ -62,7 +62,7 @@ export const votes = pgTable('votes', {
   eventId: uuid('event_id').references(() => events.id, { onDelete: 'cascade' }).notNull(),
   eventDateId: uuid('event_date_id').references(() => eventDates.id, { onDelete: 'cascade' }).notNull(),
   eventTimeId: uuid('event_time_id').references(() => eventTimes.id, { onDelete: 'cascade' }).notNull(),
-  status: text('status').$type<'attend' | 'absent' | 'pending'>().notNull().default('pending'),
+  status: boolean('status').notNull().default(false),
   votedAt: timestamp('voted_at', { mode: 'string' }).defaultNow().notNull(),
 }, (t) => [
   unique('votes_voteuser_id_event_date_id_event_time_id_unique').on(t.voteUserId, t.eventDateId, t.eventTimeId),

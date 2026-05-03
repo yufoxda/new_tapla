@@ -1,5 +1,5 @@
 import { hc } from 'hono/client'
-import type { AppType } from '../../../backend/src/index.ts'
+import type { AppType } from '@backend/index'
 
 // 本番環境（Cloudflare Pages）とローカル開発環境でのAPIベースURLを切り替える
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8787'

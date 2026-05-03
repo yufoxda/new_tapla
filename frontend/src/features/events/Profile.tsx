@@ -1,26 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { client, setAuthToken } from '../../api/client'
-import { User, LogOut, Plus, ChevronRight, Sparkles, Calendar as CalendarIcon } from 'lucide-react'
+import { User, LogOut, Plus, Sparkles, Calendar as CalendarIcon } from 'lucide-react'
+import type { z } from 'zod'
+import { UserSchema } from '@backend/features/users/schema'
+
+type UserType = z.infer<typeof UserSchema>
 
 export default function Profile() {
   const navigate = useNavigate()
 
-  const { data: user, isLoading: loadingUser } = useQuery({
+  const { data: user, isLoading: loadingUser } = useQuery<UserType>({
     queryKey: ['me'],
     queryFn: async () => {
-      const res = await client.api.users.me.$get()
+      const res = await client.api.users.$get()
       if (!res.ok) throw new Error('Unauthorized')
-      return res.json() as Promise<any>
-    }
-  })
-
-  const { data: myEvents } = useQuery({
-    queryKey: ['my-events'],
-    queryFn: async () => {
-      const res = await client.api.events.my.$get()
-      if (!res.ok) return []
-      return res.json() as Promise<any[]>
+      return res.json()
     }
   })
 
@@ -58,40 +53,22 @@ export default function Profile() {
             </div>
         </section>
 
-        {/* My Events */}
+        {/* My Events Section - Now just a call to action since backend doesn't return my events list */}
         <section className="space-y-6">
             <div className="flex items-center justify-between px-2">
-                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Organized Events</h3>
-                <Link to="/events/create" className="text-blue-600 hover:text-blue-700 transition flex items-center gap-1 font-black text-[10px] uppercase tracking-widest">
-                    <Plus className="w-3 h-3" />
-                    New Event
-                </Link>
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Event Management</h3>
             </div>
             <div className="grid gap-4">
-              {myEvents?.length === 0 ? (
-                  <div className="bg-white p-12 rounded-[32px] border-2 border-dashed border-gray-100 text-center space-y-4">
-                      <CalendarIcon className="w-8 h-8 text-gray-200 mx-auto" />
-                      <p className="text-sm text-gray-400 font-medium italic">You haven't organized any events yet.</p>
+                  <div className="bg-white p-12 rounded-[32px] border border-gray-100 shadow-sm text-center space-y-6">
+                      <CalendarIcon className="w-12 h-12 text-blue-600 mx-auto" />
+                      <p className="text-gray-500 font-medium max-w-sm mx-auto">
+                        Create a new event to share with your friends and start scheduling.
+                      </p>
+                      <Link to="/events/new" className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-full hover:bg-blue-700 transition font-black text-sm uppercase tracking-widest shadow-lg shadow-blue-200">
+                        <Plus className="w-4 h-4" />
+                        Create New Event
+                      </Link>
                   </div>
-              ) : (
-                myEvents?.map((e: any) => (
-                    <Link 
-                        key={e.id} 
-                        to={`/events/${e.id}`} 
-                        className="group bg-white p-6 rounded-3xl border border-gray-100 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-500/5 transition-all flex items-center justify-between"
-                    >
-                        <div className="space-y-1">
-                            <div className="font-black text-gray-800 group-hover:text-blue-600 transition text-lg tracking-tight">{e.title}</div>
-                            <div className="text-[10px] font-black text-gray-300 uppercase tracking-widest flex items-center gap-2">
-                                {new Date(e.createdAt).toLocaleDateString()}
-                                <span className="w-1 h-1 bg-gray-200 rounded-full" />
-                                {e.dates.length} Days
-                            </div>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-gray-200 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
-                    </Link>
-                ))
-              )}
             </div>
         </section>
       </div>

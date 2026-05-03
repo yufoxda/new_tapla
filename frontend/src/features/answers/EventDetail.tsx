@@ -2,32 +2,41 @@ import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { client } from '../../api/client'
 import { ArrowLeft, PlusCircle, MessageSquare } from 'lucide-react'
+import type { z } from 'zod'
+import { EventSchema, EventDateSchema, EventTimeSchema } from '@backend/features/events/schema'
+import { AnswerSchema, CellVoteSchema } from '@backend/features/events/answers/schema'
+
+type EventType = z.infer<typeof EventSchema>
+type AnswerType = z.infer<typeof AnswerSchema>
+type DateType = z.infer<typeof EventDateSchema>
+type TimeType = z.infer<typeof EventTimeSchema>
+type VoteType = z.infer<typeof CellVoteSchema>
 
 export default function EventDetail() {
   const { id } = useParams<{ id: string }>()
 
-  const { data: event, isLoading: loadingEvent } = useQuery({
+  const { data: event, isLoading: loadingEvent } = useQuery<EventType>({
     queryKey: ['event', id],
     queryFn: async () => {
       const res = await client.api.events[':id'].$get({ param: { id: id! } })
       if (!res.ok) throw new Error('Failed to fetch event')
-      return res.json() as Promise<any>
+      return res.json()
     }
   })
 
-  const { data: allAnswers, isLoading: loadingAnswers } = useQuery({
+  const { data: allAnswers, isLoading: loadingAnswers } = useQuery<AnswerType[]>({
     queryKey: ['answers', id],
     queryFn: async () => {
       const res = await client.api.events[':eventId'].answers.$get({ param: { eventId: id! } })
       if (!res.ok) throw new Error('Failed to fetch answers')
-      return res.json() as Promise<any[]>
+      return res.json()
     }
   })
 
   const getParticipantCount = (dateId: string, timeId: string) => {
     if (!allAnswers) return 0
-    return allAnswers.filter((ans: any) => 
-      ans.votes.some((v: any) => v.eventDateId === dateId && v.eventTimeId === timeId && v.status === 'attend')
+    return allAnswers.filter((ans: AnswerType) => 
+      ans.votes.some((v: VoteType) => v.eventDateId === dateId && v.eventTimeId === timeId && v.status === true)
     ).length
   }
 
@@ -67,19 +76,19 @@ export default function EventDetail() {
                     >
                         {/* Header Row */}
                         <div className="bg-gray-50/50 p-2 border-b border-r border-gray-50 flex items-center justify-center text-[9px] font-black text-gray-300 uppercase tracking-tighter">Time</div>
-                        {event?.dates.map((d: any) => (
+                        {event?.dates.map((d: DateType) => (
                             <div key={d.id} className="bg-gray-50/50 p-1 border-b border-r border-gray-50 flex flex-col items-center justify-center min-h-[46px]">
                                 <div className="text-xs font-black text-gray-800">{d.dateLabel}</div>
                             </div>
                         ))}
 
                         {/* Data Rows */}
-                        {event?.times.map((t: any) => (
+                        {event?.times.map((t: TimeType) => (
                             <div key={t.id} className="contents">
                                 <div className="bg-gray-50/30 p-1 border-b border-r border-gray-50 flex items-center justify-center font-mono text-[10px] font-bold text-gray-400">
                                     {t.timeLabel}
                                 </div>
-                                {event?.dates.map((d: any) => {
+                                {event?.dates.map((d: DateType) => {
                                     const count = getParticipantCount(d.id, t.id)
                                     const isHot = count > 0 && allAnswers && count === allAnswers.length && allAnswers.length > 1
                                     
@@ -107,10 +116,10 @@ export default function EventDetail() {
                 Messages
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
-                {allAnswers?.filter((a: any) => a.comment)?.length === 0 ? (
+                {allAnswers?.filter((a: AnswerType) => a.comment)?.length === 0 ? (
                     <p className="text-gray-300 text-sm italic col-span-2 text-center">No messages yet.</p>
                 ) : (
-                    allAnswers?.filter((a: any) => a.comment).map((ans: any) => (
+                    allAnswers?.filter((a: AnswerType) => a.comment).map((ans: AnswerType) => (
                         <div key={ans.id} className="p-5 bg-gray-50 rounded-2xl text-sm border border-gray-50">
                             <div className="text-[10px] font-black text-gray-400 mb-2 tracking-tighter">{ans.userLabel}</div>
                             <p className="text-gray-700 leading-relaxed font-medium">{ans.comment}</p>

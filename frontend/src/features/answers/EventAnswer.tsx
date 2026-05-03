@@ -3,8 +3,15 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { client } from '../../api/client'
 import { ArrowLeft, Check } from 'lucide-react'
+import type { z } from 'zod'
+import { EventSchema, EventDateSchema, EventTimeSchema } from '@backend/features/events/schema'
+import { UserSchema } from '@backend/features/users/schema'
 
-type AnswerStatus = 'attend' | 'absent'
+type EventType = z.infer<typeof EventSchema>
+type UserType = z.infer<typeof UserSchema>
+type DateType = z.infer<typeof EventDateSchema>
+type TimeType = z.infer<typeof EventTimeSchema>
+type AnswerStatus = boolean
 
 export default function EventAnswer() {
   const { id } = useParams<{ id: string }>()
@@ -16,24 +23,25 @@ export default function EventAnswer() {
   // Key: "dateId:timeId", Value: status
   const [localAnswers, setLocalAnswers] = useState<Record<string, AnswerStatus>>({})
 
-  const { data: event, isLoading: loadingEvent } = useQuery({
+  const { data: event, isLoading: loadingEvent } = useQuery<EventType>({
     queryKey: ['event', id],
     queryFn: async () => {
       const res = await client.api.events[':id'].$get({ param: { id: id! } })
       if (!res.ok) throw new Error('Failed to fetch event')
-      return res.json() as Promise<any>
+      return res.json()
     },
     enabled: !!id
   })
 
   // ログインユーザー情報を取得してデフォルトの名前をセット
-  useQuery({
+  useQuery<UserType | null>({
     queryKey: ['me'],
     queryFn: async () => {
-      const res = await client.api.users.me.$get()
+      const res = await client.api.users.$get()
       if (res.ok) {
-        const data = await res.json() as any
+        const data = await res.json() as UserType
         setUserLabel((prev: string) => prev || data.displayName)
+        return data
       }
       return null
     }
@@ -42,9 +50,9 @@ export default function EventAnswer() {
   useEffect(() => {
     if (!event) return
     const initial: Record<string, AnswerStatus> = {}
-    event.dates.forEach((d: any) => {
-      event.times.forEach((t: any) => {
-        initial[`${d.id}:${t.id}`] = 'absent'
+    event.dates.forEach((d: DateType) => {
+      event.times.forEach((t: TimeType) => {
+        initial[`${d.id}:${t.id}`] = false
       })
     })
     setLocalAnswers(initial)
@@ -54,7 +62,7 @@ export default function EventAnswer() {
     mutationFn: async () => {
       const votes = Object.entries(localAnswers).map(([key, status]) => {
         const [eventDateId, eventTimeId] = key.split(':')
-        return { eventDateId, eventTimeId, status: status as 'attend' | 'absent' | 'pending' }
+        return { eventDateId, eventTimeId, status }
       })
 
       const res = await client.api.events[':eventId'].answers.$put({
@@ -107,25 +115,25 @@ export default function EventAnswer() {
                 >
                     {/* Header Row */}
                     <div className="bg-gray-50/50 p-2 border-b border-r border-gray-50 flex items-center justify-center text-[9px] font-black text-gray-300 uppercase tracking-tighter">Time</div>
-                    {event?.dates.map((d: any) => (
+                    {event?.dates.map((d: DateType) => (
                         <div key={d.id} className="bg-gray-50/50 p-1 border-b border-r border-gray-50 flex flex-col items-center justify-center min-h-[46px]">
                             <div className="text-xs font-black text-gray-800">{d.dateLabel}</div>
                         </div>
                     ))}
 
                     {/* Data Rows */}
-                    {event?.times.map((t: any) => (
-                    <div key={t.id} className="contents">
+                    {event?.times.map((t: TimeType) => (
+                    <div className="contents" key={t.id}>
                         <div className="bg-gray-50/30 p-1 border-b border-r border-gray-50 flex items-center justify-center font-mono text-[10px] font-bold text-gray-400">
                         {t.timeLabel}
                         </div>
-                        {event?.dates.map((d: any) => {
+                        {event?.dates.map((d: DateType) => {
                         const cellKey = `${d.id}:${t.id}`
-                        const isAttending = localAnswers[cellKey] === 'attend'
+                        const isAttending = localAnswers[cellKey] === true
                         return (
                             <div key={d.id} className="border-b border-r border-gray-50 p-0.5 flex items-center justify-center">
                             <button
-                                onClick={() => setLocalAnswers(prev => ({ ...prev, [cellKey]: isAttending ? 'absent' : 'attend' }))}
+                                onClick={() => setLocalAnswers(prev => ({ ...prev, [cellKey]: !isAttending }))}
                                 className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-75 ${
                                     isAttending 
                                     ? 'bg-blue-600 text-white scale-90' 

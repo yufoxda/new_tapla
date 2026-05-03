@@ -3,7 +3,6 @@ import { eq, and } from 'drizzle-orm'
 import type { AppContext } from '../../../core/types'
 import { AnswerSchema, UpsertAnswerSchema } from './schema'
 import { voteUsers, votes } from '../../../db/schema'
-import { requireAuth } from '../../../core/auth'
 
 export const answersRouter = new OpenAPIHono<AppContext>()
 

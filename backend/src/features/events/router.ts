@@ -1,8 +1,8 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
-import { eq, inArray, getTableColumns } from 'drizzle-orm'
+import { eq, getTableColumns } from 'drizzle-orm'
 import type { AppContext } from '../../core/types'
-import { EventSchema, CreateEventSchema, UpdateEventSchema } from './schema'
-import { events, eventDates, eventTimes, users, voteUsers } from '../../db/schema'
+import { EventSchema, CreateEventSchema, UpdateEventSchema} from './schema'
+import { events, eventDates, eventTimes, users } from '../../db/schema'
 import { requireAuth } from '../../core/auth'
 
 import { answersRouter } from './answers/router'

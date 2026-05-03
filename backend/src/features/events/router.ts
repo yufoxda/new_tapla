@@ -7,9 +7,6 @@ import { requireAuth } from '../../core/auth'
 
 import { answersRouter } from './answers/router'
 
-export const eventsRouter = new OpenAPIHono<AppContext>()
-eventsRouter.route('/', answersRouter) // /api/events/:eventId/answers にマウント
-
 // create
 // 予定の作成
 const createEventRoute = createRoute({
@@ -80,99 +77,95 @@ const deleteEventRoute = createRoute({
   },
 })
 
-
-
 // --- API実装 ---
-eventsRouter.openapi(createEventRoute, async (c) => {
-  const db = c.get('db')
-  const user = c.get('appUser')!
-  const body = c.req.valid('json')
-  
-  return await db.transaction(async (tx) => {
-    const [newEvent] = await tx.insert(events).values({
-      title: body.title,
-      description: body.description || null,
-      creatorId: user.id,
-    }).returning()
-
-    const dateRecords = body.dates.map((label, index) => ({
-      eventId: newEvent.id,
-      dateLabel: label,
-      columnOrder: index,
-    }))
-    const insertedDates = await tx.insert(eventDates).values(dateRecords).returning()
-
-    const timeRecords = body.times.map((label, index) => ({
-      eventId: newEvent.id,
-      timeLabel: label,
-      rowOrder: index,
-    }))
-    const insertedTimes = await tx.insert(eventTimes).values(timeRecords).returning()
-
-    return c.json({
-      ...newEvent,
-      creatorDisplayName: user.displayName,
-      dates: insertedDates,
-      times: insertedTimes,
-    }, 201)
-  })
-})
-
-
-eventsRouter.openapi(getEventByIdRoute, async (c) => {
-  const db = c.get('db')
-  const id = c.req.valid('param').id
-  
-  const [event] = await db.select({
-    ...getTableColumns(events),
-    creatorDisplayName: users.displayName
-  }).from(events)
-    .leftJoin(users, eq(events.creatorId, users.id))
-    .where(eq(events.id, id))
+export const eventsRouter = new OpenAPIHono<AppContext>()
+  .route('/answers', answersRouter) // /api/events/:eventId/answers にマウント
+  .openapi(createEventRoute, async (c) => {
+    const db = c.get('db')
+    const user = c.get('appUser')!
+    const body = c.req.valid('json')
     
-  if (!event) return c.json({ error: 'Not found' }, 404)
+    return await db.transaction(async (tx) => {
+      const [newEvent] = await tx.insert(events).values({
+        title: body.title,
+        description: body.description || null,
+        creatorId: user.id,
+      }).returning()
 
-  const dates = await db.select().from(eventDates).where(eq(eventDates.eventId, event.id)).orderBy(eventDates.columnOrder)
-  const times = await db.select().from(eventTimes).where(eq(eventTimes.eventId, event.id)).orderBy(eventTimes.rowOrder)
+      const dateRecords = body.dates.map((label, index) => ({
+        eventId: newEvent.id,
+        dateLabel: label,
+        columnOrder: index,
+      }))
+      const insertedDates = await tx.insert(eventDates).values(dateRecords).returning()
 
-  return c.json({ ...event, dates, times })
-})
+      const timeRecords = body.times.map((label, index) => ({
+        eventId: newEvent.id,
+        timeLabel: label,
+        rowOrder: index,
+      }))
+      const insertedTimes = await tx.insert(eventTimes).values(timeRecords).returning()
 
-eventsRouter.openapi(updateEventRoute, async (c) => {
-  const db = c.get('db')
-  const user = c.get('appUser')!
-  const id = c.req.valid('param').id
-  const body = c.req.valid('json')
-  const now = new Date().toISOString()
-
-  const [existing] = await db.select().from(events).where(eq(events.id, id))
-  if (!existing) return c.json({ error: 'Not found' }, 404)
-  if (existing.creatorId !== user.id) {
-    return c.json({ error: 'Forbidden' }, 403)
-  }
-
-  return await db.transaction(async (tx) => {
-    const updatedEvent = await tx.update(events).set({
-      title: body.title,
-      description: body.description || null,
-      updatedAt: now,
-    }).where(eq(events.id, id)).returning()
-    return c.json(updatedEvent)
+      return c.json({
+        ...newEvent,
+        creatorDisplayName: user.displayName,
+        dates: insertedDates,
+        times: insertedTimes,
+      }, 201)
+    })
   })
-})
+  .openapi(getEventByIdRoute, async (c) => {
+    const db = c.get('db')
+    const id = c.req.valid('param').id
+    
+    const [event] = await db.select({
+      ...getTableColumns(events),
+      creatorDisplayName: users.displayName
+    }).from(events)
+      .leftJoin(users, eq(events.creatorId, users.id))
+      .where(eq(events.id, id))
+      
+    if (!event) return c.json({ error: 'Not found' }, 404)
 
-eventsRouter.openapi(deleteEventRoute, async (c) => {
-  const db = c.get('db')
-  const user = c.get('appUser')!
-  const id = c.req.valid('param').id
+    const dates = await db.select().from(eventDates).where(eq(eventDates.eventId, event.id)).orderBy(eventDates.columnOrder)
+    const times = await db.select().from(eventTimes).where(eq(eventTimes.eventId, event.id)).orderBy(eventTimes.rowOrder)
 
-  const [existing] = await db.select().from(events).where(eq(events.id, id))
-  if (!existing) return c.json({ error: 'Not found' }, 404)
-  if (existing.creatorId !== user.id) {
-    return c.json({ error: 'Forbidden' }, 403)
-  }
+    return c.json({ ...event, dates, times })
+  })
+  .openapi(updateEventRoute, async (c) => {
+    const db = c.get('db')
+    const user = c.get('appUser')!
+    const id = c.req.valid('param').id
+    const body = c.req.valid('json')
+    const now = new Date().toISOString()
 
-  await db.delete(events).where(eq(events.id, id))
-  return c.body(null, 204)
-})
+    const [existing] = await db.select().from(events).where(eq(events.id, id))
+    if (!existing) return c.json({ error: 'Not found' }, 404)
+    if (existing.creatorId !== user.id) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+
+    return await db.transaction(async (tx) => {
+      const updatedEvent = await tx.update(events).set({
+        title: body.title,
+        description: body.description || null,
+        updatedAt: now,
+      }).where(eq(events.id, id)).returning()
+      return c.json(updatedEvent)
+    })
+  })
+  .openapi(deleteEventRoute, async (c) => {
+    const db = c.get('db')
+    const user = c.get('appUser')!
+    const id = c.req.valid('param').id
+
+    const [existing] = await db.select().from(events).where(eq(events.id, id))
+    if (!existing) return c.json({ error: 'Not found' }, 404)
+    if (existing.creatorId !== user.id) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+
+    await db.delete(events).where(eq(events.id, id))
+    return c.body(null, 204)
+  })
 

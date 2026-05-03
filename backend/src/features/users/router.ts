@@ -7,9 +7,6 @@ import { users } from '../../db/schema'
 
 import { userAvailableRouter } from './available/router'
 
-export const usersRouter = new OpenAPIHono<AppContext>()
-usersRouter.route('/available', userAvailableRouter)
-
 // create 
 // ユーザーはKeycloakで管理するため、ユーザー作成APIは不要
 
@@ -54,26 +51,27 @@ const updateUserInfoRoute = createRoute({
 
 // --- API実装 ---
 
-usersRouter.openapi(getUserInfoRoute, async (c) => {
-  const user = c.get('appUser')!
-  return c.json({
-    id: user.id,
-    displayName: user.displayName
+export const usersRouter = new OpenAPIHono<AppContext>()
+  .route('/available', userAvailableRouter)
+  .openapi(getUserInfoRoute, async (c) => {
+    const user = c.get('appUser')!
+    return c.json({
+      id: user.id,
+      displayName: user.displayName
+    })
   })
-})
+  .openapi(updateUserInfoRoute, async (c) => {
+    const db = c.get('db')
+    const user = c.get('appUser')!
+    const body = c.req.valid('json')
+    
+    const [updatedUser] = await db.update(users)
+      .set({ displayName: body.displayName, updatedAt: new Date().toISOString() })
+      .where(eq(users.id, user.id))
+      .returning()
 
-usersRouter.openapi(updateUserInfoRoute, async (c) => {
-  const db = c.get('db')
-  const user = c.get('appUser')!
-  const body = c.req.valid('json')
-  
-  const [updatedUser] = await db.update(users)
-    .set({ displayName: body.displayName, updatedAt: new Date().toISOString() })
-    .where(eq(users.id, user.id))
-    .returning()
-
-  return c.json({
-    id: updatedUser.id,
-    displayName: updatedUser.displayName,
+    return c.json({
+      id: updatedUser.id,
+      displayName: updatedUser.displayName,
+    })
   })
-})

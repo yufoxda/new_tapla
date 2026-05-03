@@ -12,28 +12,24 @@ import { eventsRouter } from './features/events/router'
 import { usersRouter } from './features/users/router'
 
 const app = new OpenAPIHono<AppContext>()
-
-// Global Middlewares
-app.use('*', cors())
-app.use('*', dbMiddleware)
-app.use('/user/*', authMiddleware)
-app.onError(errorHandler)
-  
-// Feature Routes
-app.route('/api/users', usersRouter)
-app.route('/api/events', eventsRouter)
-
-// OpenAPI & Swagger UI
-app.doc('/doc', {
-  openapi: '3.0.0',
-  info: {
-    version: '1.0.0',
-    title: 'Circle Scheduling API',
-    description: 'API for Circle Scheduling App',
-  },
-})
-
-app.get('/ui', swaggerUI({ url: '/doc' }))
+  .use('*', cors())
+  .use('*', dbMiddleware)
+  .use('/api/users/*', authMiddleware)
+  .get('/doc', (c): Response => {
+    return c.json((app as OpenAPIHono<AppContext>).getOpenAPI31Document({
+      openapi: '3.0.0',
+      info: {
+        version: '1.0.0',
+        title: 'API Documentation',
+        description: 'Hono + Zod-OpenAPIを使用したAPI',
+      },
+    }));
+  })
+  .get('/ui', swaggerUI({ url: '/doc' }))
+  .get('/health', (c): Response => c.json({ status: 'ok' }))
+  .route('/api/users', usersRouter)
+  .route('/api/events', eventsRouter)
+  .onError(errorHandler)
 
 // Export type for Hono RPC in frontend
 export type AppType = typeof app

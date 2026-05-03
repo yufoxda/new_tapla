@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless'
-import { drizzle } from 'drizzle-orm/neon-http'
+import { drizzle } from 'drizzle-orm/neon-serverless'
 import type { Context, Next } from 'hono'
 import type { AppContext } from './types'
 
@@ -11,7 +11,7 @@ export const dbMiddleware = async (c: Context<AppContext>, next: Next) => {
 
   // Neon HTTPクライアントとDrizzleインスタンスを作成
   const sql = neon(c.env.DATABASE_URL)
-  const db = drizzle(sql)
+  const db = drizzle(c.env.DATABASE_URL)
 
   c.set('db', db)
 

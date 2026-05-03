@@ -1,4 +1,4 @@
-import type { NeonHttpDatabase } from 'drizzle-orm/neon-http'
+import type { NeonDatabase } from 'drizzle-orm/neon-serverless'
 import type { appUser } from './auth' // Will be defined in auth.ts
 
 export type CloudflareBindings = {
@@ -9,7 +9,7 @@ export type CloudflareBindings = {
 export type AppContext = {
   Bindings: CloudflareBindings
   Variables: {
-    db: NeonHttpDatabase<any>
+    db: NeonDatabase
     appUser?: appUser
   }
 }

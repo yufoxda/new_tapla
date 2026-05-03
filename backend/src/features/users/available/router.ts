@@ -5,7 +5,7 @@ import { AvailablePatternSchema } from './schema'
 import { userAvailabilityPatterns } from '../../../db/schema'
 import { requireAuth } from '../../../core/auth'
 
-export const userAvailableRouter = new OpenAPIHono<AppContext>()
+const baseRouter = new OpenAPIHono<AppContext>()
 
 // create
 // update に統合
@@ -47,39 +47,39 @@ const updateMyAvailabilityRoute = createRoute({
 
 
 // --- API実装 ---
-userAvailableRouter.openapi(getMyAvailabilityRoute, async (c) => {
-  const db = c.get('db')
-  const user = c.get('appUser')!
-  const results = await db.select().from(userAvailabilityPatterns)
-                            .where(eq(userAvailabilityPatterns.userId, user.id))
+export const userAvailableRouter = new OpenAPIHono<AppContext>()
+  .openapi(getMyAvailabilityRoute, async (c) => {
+    const db = c.get('db')
+    const user = c.get('appUser')!
+    const results = await db.select().from(userAvailabilityPatterns)
+                              .where(eq(userAvailabilityPatterns.userId, user.id))
 
-  return c.json(results.map(r => ({
-    startTime: r.startTime,
-    endTime: r.endTime
-  })))
-})
-
-userAvailableRouter.openapi(updateMyAvailabilityRoute, async (c) => {
-  const db = c.get('db')
-  const user = c.get('appUser')!
-  const body = c.req.valid('json')
-
-  // todo: マージロジックを入れる。現状は全削除して入れ直し
-  // todo: バリデーション。重複や、startTime < endTimeなど
-  await db.transaction(async (tx) => {
-    
-    await tx.delete(userAvailabilityPatterns).where(eq(userAvailabilityPatterns.userId, user.id))
-    
-    const records = body.map(item => ({
-        userId: user.id,
-        startTime: item.startTime,
-        endTime: item.endTime,
-    }))
-
-    if (records.length > 0) {
-        await tx.insert(userAvailabilityPatterns).values(records)
-    }
+    return c.json(results.map(r => ({
+      startTime: r.startTime,
+      endTime: r.endTime
+    })))
   })
+  .openapi(updateMyAvailabilityRoute, async (c) => {
+    const db = c.get('db')
+    const user = c.get('appUser')!
+    const body = c.req.valid('json')
 
-  return c.json({ success: true })
-})
+    // todo: マージロジックを入れる。現状は全削除して入れ直し
+    // todo: バリデーション。重複や、startTime < endTimeなど
+    await db.transaction(async (tx) => {
+      
+      await tx.delete(userAvailabilityPatterns).where(eq(userAvailabilityPatterns.userId, user.id))
+      
+      const records = body.map(item => ({
+          userId: user.id,
+          startTime: item.startTime,
+          endTime: item.endTime,
+      }))
+
+      if (records.length > 0) {
+          await tx.insert(userAvailabilityPatterns).values(records)
+      }
+    })
+
+    return c.json({ success: true })
+  })
